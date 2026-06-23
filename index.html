@@ -6,6 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>J vs M Challenge</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Firebase (replace config below with your project's values) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--j:#16a34a;--m:#C8B7C9;--text:#e2e8f0}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -117,6 +120,59 @@ function render(){entries.sort((a,b)=>a.date.localeCompare(b.date));let j=0,m=0,
     showChart(selectedChart)}
 initCharts();
 render();
+</script>
+
+<!-- Firestore integration (append) -->
+<script>
+// Replace with your Firebase project's config to enable shared entries.
+const firebaseConfig = {
+  // apiKey: 'YOUR_API_KEY',
+  // authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  // projectId: 'YOUR_PROJECT_ID'
+};
+
+// NOTE: To allow public (no-auth) reads/writes during testing, set Firestore rules:
+// service cloud.firestore { match /databases/{database}/documents { match /entries/{doc} { allow read, write: if true; } } }
+
+let db = null;
+try{
+  if(firebaseConfig.projectId){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    const col = db.collection('entries');
+    col.orderBy('date').onSnapshot(snap=>{
+      entries = snap.docs.map(d=>({ ...d.data(), id: d.id }));
+      save();
+      render();
+    }, err=>console.warn('Firestore listener error',err));
+  }
+}catch(e){console.warn('Firestore init failed',e)}
+
+// Override add/delete/edit to write to Firestore when available
+function addEntry(){
+  const e={date:date.value,competitor:competitor.value,snacks:+(snacks.value||0),water:+(water.value||0),steps:+(steps.value||0),weight:weight.value?+weight.value:null};
+  if(!e.date) return; e.points = calculatePoints(e.snacks,e.water,e.steps);
+  if(db){
+    db.collection('entries').add(e).catch(err=>{console.error('Firestore add failed',err);entries.push(e);save();render();});
+  } else { entries.push(e); save(); render(); }
+  date.value = isoToday;
+}
+
+function del(i){
+  const item = entries[i];
+  if(item && item.id && db){
+    db.collection('entries').doc(item.id).delete().catch(err=>{console.error('Firestore delete failed',err);entries.splice(i,1);save();render();});
+  } else { entries.splice(i,1); save(); render(); }
+}
+
+function edit(i){
+  const e = entries[i];
+  if(!e) return;
+  date.value = e.date; competitor.value = e.competitor; snacks.value = e.snacks; water.value = e.water; steps.value = e.steps; weight.value = e.weight || '';
+  // remove original; Firestore doc removed if present so that saving creates a new doc
+  if(e.id && db){ db.collection('entries').doc(e.id).delete().catch(()=>{}); }
+  else { entries.splice(i,1); save(); }
+}
 </script>
 </body>
 </html>
