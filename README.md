@@ -1,39 +1,30 @@
-# J vs M Challenge — Hosting & Setup
+# J vs M Challenge — How to Use
 
-This single-file site (index.html) tracks daily results and can be hosted publicly on GitHub Pages. It includes an optional Firestore integration for shared, no-auth entries.
+This repository is a single-file web application. The main page is [index.html](index.html) and it records daily results. It can run entirely in your browser (using localStorage) or optionally sync across devices via Firebase Firestore.
 
-## Quick repo push (local)
-1. Install Git and GitHub CLI if needed:
+**Quick overview**
+- Open the site in a browser to view, add, and edit entries.
+- If you add a Firebase config, entries will sync in near real-time across devices.
 
-   - Git: https://git-scm.com/download/win
-   - GitHub CLI: https://cli.github.com/
+## Quick Start (open in browser)
+1. Double-click [index.html](index.html) or open it in your browser.
+2. Use the UI to add an entry. Entries are saved to your browser's storage by default.
 
-2. From PowerShell in the project folder:
+## Run a local static server (recommended for some browsers)
+From the project folder run a simple server if you want proper CORS/Fetch behavior or test Firebase locally:
 
+Windows (PowerShell):
 ```powershell
-cd "C:\Users\jonbo\Documents\Websites"
-git init -b main
-git add .
-git commit -m "Initial commit: J vs M Challenge (Firestore integration)"
-gh repo create the-vineyard --public --source=. --remote=origin --push
-# OR if you created the repo on github.com manually:
-# git remote add origin https://github.com/<your-username>/the-vineyard.git
-# git push -u origin main
+python -m http.server 8000
 ```
+Then open `http://localhost:8000` in your browser.
 
-## Enable GitHub Pages
-1. Go to the repo on GitHub → Settings → Pages
-2. Choose branch `main` and folder `/ (root)`, Save. The site will be available at `https://<your-username>.github.io/the-vineyard/`.
+## Using Firebase Firestore (optional)
+1. Create a Firebase project at https://console.firebase.google.com/ and enable Firestore (Native mode).
+2. In Project Settings → SDK config copy the config object.
+3. Edit [index.html](index.html) and replace the `firebaseConfig` placeholder with your values.
 
-## Firebase Firestore (public, no-auth)
-This project includes a small Firestore listener and uses the `entries` collection for shared data.
-
-1. Create a Firebase project at https://console.firebase.google.com/
-2. Create a Firestore database (Native mode).
-3. In Project Settings → SDK config, copy the config values and replace the `firebaseConfig` object in `index.html`.
-
-Example config (replace with your values):
-
+Example:
 ```js
 const firebaseConfig = {
   apiKey: 'YOUR_API_KEY',
@@ -42,8 +33,7 @@ const firebaseConfig = {
 };
 ```
 
-4. (Optional / required if you want truly public writes) Update Firestore rules for testing only:
-
+4. (Optional testing) If you want public writes for quick testing, set Firestore rules to allow reads/writes — only for testing:
 ```
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -51,27 +41,29 @@ service cloud.firestore {
   }
 }
 ```
+Warning: public writes are insecure. For production, add validation rules or authentication.
 
-Warning: Allowing public writes makes your database writable by anyone. For production, consider adding validation rules or simple token-based checks.
+## What to expect
+- If `firebaseConfig` is present and valid, the app will connect to Firestore and sync the `entries` collection in real time.
+- If Firestore is not configured, the app stores data in `localStorage` (per-browser).
 
-## How the integration works
-- The page will use Firestore when a valid `firebaseConfig.projectId` is present.
-- A realtime listener keeps `entries` synced and updates charts automatically.
-- If Firestore is not configured, the page falls back to `localStorage`.
+## Deploy (GitHub Pages)
+1. Push the repo to GitHub.
+2. In the repository Settings → Pages, set source to branch `main` and folder `/ (root)`.
 
-## Testing
-1. Open the site (locally or via GitHub Pages).
-2. Add an entry from two different browsers or devices; if Firestore is configured and rules permit, both will sync in near real-time.
+Your site will be available at `https://<your-username>.github.io/<repo-name>/`.
 
 ## Troubleshooting
-- If nothing syncs, open browser DevTools Console for Firebase errors.
-- Ensure `firebaseConfig` is correct and Firestore rules permit reads.
-- If you prefer not to use Firestore, keep using the local file — entries are stored per-browser in `localStorage`.
+- No sync or Firebase errors: open DevTools Console and check Firebase messages.
+- Verify `firebaseConfig` values and Firestore rules.
+- If entries don't persist between sessions, ensure `localStorage` isn't disabled and you're not using a private browsing mode that clears storage.
 
-## Next steps I can help with
-- Push the repo for you (I attempted, but `git`/`gh` aren't available in this environment).
-- Create a sample `firebaseConfig`-filled file if you provide your Firebase values.
-- Lock down Firestore rules with basic validation.
+## Development notes
+- The whole app lives in [index.html](index.html). Edit it to change UI, labels, or Firebase behavior.
+- Use a local HTTP server when testing features that rely on network requests.
+
+## Want help?
+- I can: push the repo to GitHub, help fill in `firebaseConfig` (if you share values), or suggest secure Firestore rules.
 
 ---
-Files: `index.html` — main site (edit firebaseConfig and Firestore rules as described).
+Files: [index.html](index.html) — main site.
