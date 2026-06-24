@@ -1,4 +1,4 @@
-
+﻿
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,57 +122,60 @@ initCharts();
 render();
 </script>
 
-<!-- Firestore integration (append) -->
+<!-- Firestore integration (compat-only) -->
 <script>
-// Replace with your Firebase project's config to enable shared entries.
-const firebaseConfig = {
-  // apiKey: 'YOUR_API_KEY',
-  // authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  // projectId: 'YOUR_PROJECT_ID'
-};
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyAiB-nR5IxGHQ5xNOuNic_WKClFaCEozyg",
+    authDomain: "weeks-caaa5.firebaseapp.com",
+    projectId: "weeks-caaa5",
+    storageBucket: "weeks-caaa5.firebasestorage.app",
+    messagingSenderId: "151108537499",
+    appId: "1:151108537499:web:f7012fc51662e4439f8a3e",
+    measurementId: "G-CC8X6BPHHF"
+  };
 
-// NOTE: To allow public (no-auth) reads/writes during testing, set Firestore rules:
-// service cloud.firestore { match /databases/{database}/documents { match /entries/{doc} { allow read, write: if true; } } }
-
-let db = null;
-try{
-  if(firebaseConfig.projectId){
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    const col = db.collection('entries');
-    col.orderBy('date').onSnapshot(snap=>{
-      entries = snap.docs.map(d=>({ ...d.data(), id: d.id }));
-      save();
-      render();
-    }, err=>console.warn('Firestore listener error',err));
+  let db = null;
+  try {
+    if (firebaseConfig.projectId) {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      const col = db.collection('entries');
+      col.orderBy('date').onSnapshot(snap => {
+        entries = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        save();
+        render();
+      }, err => console.warn('Firestore listener error', err));
+    }
+  } catch (e) {
+    console.warn('Firestore init failed', e);
   }
-}catch(e){console.warn('Firestore init failed',e)}
 
-// Override add/delete/edit to write to Firestore when available
-function addEntry(){
-  const e={date:date.value,competitor:competitor.value,snacks:+(snacks.value||0),water:+(water.value||0),steps:+(steps.value||0),weight:weight.value?+weight.value:null};
-  if(!e.date) return; e.points = calculatePoints(e.snacks,e.water,e.steps);
-  if(db){
-    db.collection('entries').add(e).catch(err=>{console.error('Firestore add failed',err);entries.push(e);save();render();});
-  } else { entries.push(e); save(); render(); }
-  date.value = isoToday;
-}
+  // Override add/delete/edit to write to Firestore when available
+  function addEntry() {
+    const e = {date: date.value, competitor: competitor.value, snacks: +(snacks.value || 0), water: +(water.value || 0), steps: +(steps.value || 0), weight: weight.value ? +weight.value : null};
+    if (!e.date) return; e.points = calculatePoints(e.snacks, e.water, e.steps);
+    if (db) {
+      db.collection('entries').add(e).catch(err => { console.error('Firestore add failed', err); entries.push(e); save(); render(); });
+    } else { entries.push(e); save(); render(); }
+    date.value = isoToday;
+  }
 
-function del(i){
-  const item = entries[i];
-  if(item && item.id && db){
-    db.collection('entries').doc(item.id).delete().catch(err=>{console.error('Firestore delete failed',err);entries.splice(i,1);save();render();});
-  } else { entries.splice(i,1); save(); render(); }
-}
+  function del(i) {
+    const item = entries[i];
+    if (item && item.id && db) {
+      db.collection('entries').doc(item.id).delete().catch(err => { console.error('Firestore delete failed', err); entries.splice(i, 1); save(); render(); });
+    } else { entries.splice(i, 1); save(); render(); }
+  }
 
-function edit(i){
-  const e = entries[i];
-  if(!e) return;
-  date.value = e.date; competitor.value = e.competitor; snacks.value = e.snacks; water.value = e.water; steps.value = e.steps; weight.value = e.weight || '';
-  // remove original; Firestore doc removed if present so that saving creates a new doc
-  if(e.id && db){ db.collection('entries').doc(e.id).delete().catch(()=>{}); }
-  else { entries.splice(i,1); save(); }
-}
+  function edit(i) {
+    const e = entries[i];
+    if (!e) return;
+    date.value = e.date; competitor.value = e.competitor; snacks.value = e.snacks; water.value = e.water; steps.value = e.steps; weight.value = e.weight || '';
+    if (e.id && db) { db.collection('entries').doc(e.id).delete().catch(() => {}); }
+    else { entries.splice(i, 1); save(); }
+  }
 </script>
 </body>
 </html>
