@@ -66,6 +66,7 @@ th,td{padding:12px;border-bottom:1px solid rgba(148,163,184,.16);text-align:cent
 <body>
 <div class='container'>
 <h1>🏆 J vs M Challenge</h1>
+<div id='syncStatus' style='padding:8px 16px;border-radius:8px;text-align:center;font-size:0.9rem;margin-bottom:12px;display:none;'></div>
 <div class='card center-card'><h3 id='leaderboard'>Leaderboard</h3><p id='weightSummary'></p><p id='projectedWinner'></p></div>
 <div class='card'><h3>Challenge Progress</h3><div class='progress'><div id='progressBar' class='bar'></div></div><p id='progressText'></p></div>
 <div class='card'><div class='form-grid'><div><label>Date</label><input type='date' id='date' onclick='this.showPicker&&this.showPicker()' onfocus='this.showPicker&&this.showPicker()'></div><div><label>Competitor</label><select id='competitor'><option>J</option><option>M</option></select></div><div><label>Snacks</label><input type='number' id='snacks'></div><div><label>Water (L)</label><input type='number' id='water'></div><div><label>Steps</label><input type='number' id='steps'></div><div><label>Weight (kg)</label><input type='number' id='weight' step='0.1'></div></div><button onclick='addEntry()'>Add Result</button></div>
@@ -94,7 +95,7 @@ if (!date.value) date.value = isoToday;
 function save(){localStorage.setItem('competitionData',JSON.stringify(entries))}
 function calculatePoints(s,w,st){return (s===0?2:0)-(s||0)+(w||0)+Math.floor((st||0)/5000)}
 function formatDate(value){const d=new Date(value);return isNaN(d)?value:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
-function addEntry(){const e={date:date.value,competitor:competitor.value,snacks:+(snacks.value||0),water:+(water.value||0),steps:+(steps.value||0),weight:weight.value?+weight.value:null};if(!e.date)return;e.points=calculatePoints(e.snacks,e.water,e.steps);entries.push(e);save();render();date.value=isoToday}
+function addEntry(){const e={date:date.value,competitor:competitor.value,snacks:+(snacks.value||0),water:+(water.value||0),steps:+(steps.value||0),weight:weight.value?+weight.value:null};if(!e.date){alert('Please select a date');return}if(e.snacks<0||e.water<0||e.steps<0){alert('Values cannot be negative');return}if(e.weight!==null&&(e.weight<30||e.weight>200)){alert('Weight must be between 30-200 kg');return}e.points=calculatePoints(e.snacks,e.water,e.steps);entries.push(e);save();render();date.value=isoToday}
 function del(i){entries.splice(i,1);save();render()}
 function edit(i){const e=entries[i];date.value=e.date;competitor.value=e.competitor;snacks.value=e.snacks;water.value=e.water;steps.value=e.steps;weight.value=e.weight||'';del(i)}
 function opts(type){return{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{backgroundColor:'#1e293b',titleColor:'#fff',bodyColor:'#fff'},legend:{position:window.innerWidth<768?'bottom':'top',labels:{color:'#e2e8f0',boxWidth:12}}},scales:{x:{ticks:{color:'#e2e8f0',maxRotation:45,minRotation:45},grid:{color:'#334155'}},y:{title:{display:true,text:type==='weight'?'Weight (kg)':'Points'},ticks:{color:'#e2e8f0'},grid:{color:'#334155'}}}}}
@@ -125,7 +126,6 @@ render();
 <!-- Firestore integration (compat-only) -->
 <script>
   // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyAiB-nR5IxGHQ5xNOuNic_WKClFaCEozyg",
     authDomain: "weeks-caaa5.firebaseapp.com",
@@ -137,44 +137,115 @@ render();
   };
 
   let db = null;
+  let syncConnected = false;
+  
+  function updateSyncStatus(status, message, isError = false) {
+    const el = document.getElementById('syncStatus');
+    if (!message) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    el.textContent = message;
+    el.style.backgroundColor = isError ? 'rgba(220,38,38,.15)' : 'rgba(34,197,94,.15)';
+    el.style.color = isError ? '#fca5a5' : '#86efac';
+    el.style.borderLeft = isError ? '3px solid #dc2626' : '3px solid #22c55e';
+  }
+
   try {
     if (firebaseConfig.projectId) {
       firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
+      updateSyncStatus('connecting', '⟳ Connecting to cloud...');
+      
       const col = db.collection('entries');
       col.orderBy('date').onSnapshot(snap => {
         entries = snap.docs.map(d => ({ ...d.data(), id: d.id }));
         save();
         render();
-      }, err => console.warn('Firestore listener error', err));
+        syncConnected = true;
+        updateSyncStatus('connected', '✓ Cloud synced', false);
+        setTimeout(() => updateSyncStatus('', ''), 3000);
+      }, err => {
+        syncConnected = false;
+        console.error('Firestore listener error:', err);
+        updateSyncStatus('error', `✗ Sync error: ${err.message}. Changes saved locally.`, true);
+      });
     }
   } catch (e) {
-    console.warn('Firestore init failed', e);
+    syncConnected = false;
+    console.error('Firestore init failed:', e);
+    updateSyncStatus('error', `✗ Setup error: ${e.message}. Using local storage only.`, true);
   }
 
   // Override add/delete/edit to write to Firestore when available
   function addEntry() {
     const e = {date: date.value, competitor: competitor.value, snacks: +(snacks.value || 0), water: +(water.value || 0), steps: +(steps.value || 0), weight: weight.value ? +weight.value : null};
-    if (!e.date) return; e.points = calculatePoints(e.snacks, e.water, e.steps);
+    if (!e.date) return; 
+    e.points = calculatePoints(e.snacks, e.water, e.steps);
+    
     if (db) {
-      db.collection('entries').add(e).catch(err => { console.error('Firestore add failed', err); entries.push(e); save(); render(); });
-    } else { entries.push(e); save(); render(); }
+      updateSyncStatus('syncing', '⟳ Saving...');
+      db.collection('entries').add(e).then(() => {
+        updateSyncStatus('connected', '✓ Saved to cloud', false);
+        setTimeout(() => updateSyncStatus('', ''), 2000);
+      }).catch(err => { 
+        console.error('Firestore add failed:', err);
+        updateSyncStatus('error', `✗ Cloud save failed: ${err.message}. Saved locally.`, true);
+        entries.push(e); 
+        save(); 
+        render(); 
+      });
+    } else { 
+      entries.push(e); 
+      save(); 
+      render(); 
+      updateSyncStatus('warning', '⚠ Cloud not connected. Saved locally only.', true);
+      setTimeout(() => updateSyncStatus('', ''), 3000);
+    }
     date.value = isoToday;
   }
 
   function del(i) {
     const item = entries[i];
     if (item && item.id && db) {
-      db.collection('entries').doc(item.id).delete().catch(err => { console.error('Firestore delete failed', err); entries.splice(i, 1); save(); render(); });
-    } else { entries.splice(i, 1); save(); render(); }
+      updateSyncStatus('syncing', '⟳ Deleting...');
+      db.collection('entries').doc(item.id).delete().then(() => {
+        updateSyncStatus('connected', '✓ Deleted from cloud', false);
+        setTimeout(() => updateSyncStatus('', ''), 2000);
+      }).catch(err => { 
+        console.error('Firestore delete failed:', err);
+        updateSyncStatus('error', `✗ Cloud delete failed: ${err.message}. Deleted locally.`, true);
+        entries.splice(i, 1); 
+        save(); 
+        render(); 
+      });
+    } else { 
+      entries.splice(i, 1); 
+      save(); 
+      render();
+      if (!db) {
+        updateSyncStatus('warning', '⚠ Cloud not connected. Deleted locally only.', true);
+        setTimeout(() => updateSyncStatus('', ''), 3000);
+      }
+    }
   }
 
   function edit(i) {
     const e = entries[i];
     if (!e) return;
-    date.value = e.date; competitor.value = e.competitor; snacks.value = e.snacks; water.value = e.water; steps.value = e.steps; weight.value = e.weight || '';
-    if (e.id && db) { db.collection('entries').doc(e.id).delete().catch(() => {}); }
-    else { entries.splice(i, 1); save(); }
+    date.value = e.date; 
+    competitor.value = e.competitor; 
+    snacks.value = e.snacks; 
+    water.value = e.water; 
+    steps.value = e.steps; 
+    weight.value = e.weight || '';
+    if (e.id && db) { 
+      db.collection('entries').doc(e.id).delete().catch(err => console.error('Edit delete error:', err)); 
+    } else { 
+      entries.splice(i, 1); 
+      save(); 
+    }
   }
 </script>
 </body>
